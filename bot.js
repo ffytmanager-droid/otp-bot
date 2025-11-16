@@ -3745,6 +3745,15 @@ async sendBroadcastToAllUsers(adminChatId, messageId) {
 
 const bot = new OTPBot();
 
+app.get('/', (req, res) => {
+  res.send('🔥 Fire OTP Bot is Running!');
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
+
 process.on('SIGINT', () => {
   console.log('🛑 Shutting down bot gracefully...');
   bot.cleanup();
@@ -3765,3 +3774,4 @@ process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
 
 });
+
