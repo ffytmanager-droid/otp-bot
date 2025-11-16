@@ -5,6 +5,9 @@ const FirexOTPService = require('./firexService');
 const PaymentService = require('./paymentService');
 const NotificationService = require('./notificationService');
 
+const express = require('express');
+const app = express();
+
 class OTPBot {
   constructor() {
     this.bot = new TelegramBot(config.BOT_TOKEN, {
@@ -3760,4 +3763,5 @@ process.on('unhandledRejection', (error) => {
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
+
 });
