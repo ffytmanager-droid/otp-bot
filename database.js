@@ -16,136 +16,140 @@ class DatabaseManager {
       console.log('✅ Connected to PostgreSQL database');
 
       // Create tables if they don't exist
-      const queries = [
-        `CREATE TABLE IF NOT EXISTS users (
-          user_id BIGINT PRIMARY KEY,
-          balance DECIMAL DEFAULT 0,
-          joined_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          channel_joined BOOLEAN DEFAULT FALSE,
-          terms_accepted BOOLEAN DEFAULT FALSE,
-          last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          total_orders INTEGER DEFAULT 0,
-          first_name TEXT,
-          username TEXT
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS orders (
-          id SERIAL PRIMARY KEY,
-          user_id BIGINT REFERENCES users(user_id),
-          service TEXT,
-          phone TEXT,
-          price DECIMAL,
-          order_id TEXT UNIQUE,
-          activation_id TEXT,
-          status TEXT,
-          order_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          otp_code TEXT,
-          server_used TEXT,
-          original_price DECIMAL,
-          discount_applied DECIMAL DEFAULT 0
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS active_orders (
-          order_id TEXT PRIMARY KEY,
-          activation_id TEXT,
-          user_id BIGINT REFERENCES users(user_id),
-          phone TEXT,
-          product TEXT,
-          expires_at TIMESTAMP,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          server_used TEXT
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS topup_requests (
-          id SERIAL PRIMARY KEY,
-          user_id BIGINT REFERENCES users(user_id),
-          amount DECIMAL,
-          utr TEXT UNIQUE,
-          status TEXT,
-          request_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS gift_codes (
-          code TEXT PRIMARY KEY,
-          amount DECIMAL,
-          created_by BIGINT,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          max_uses INTEGER DEFAULT 1,
-          expires_at TIMESTAMP,
-          min_deposit DECIMAL DEFAULT 0
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS gift_code_uses (
-          id SERIAL PRIMARY KEY,
-          code TEXT REFERENCES gift_codes(code),
-          user_id BIGINT REFERENCES users(user_id),
-          used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          UNIQUE(code, user_id)
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS admin_logs (
-          id SERIAL PRIMARY KEY,
-          admin_id BIGINT,
-          action TEXT,
-          target_user_id BIGINT,
-          details TEXT,
-          timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS monthly_deposits (
-          user_id BIGINT REFERENCES users(user_id),
-          month_year TEXT,
-          total_deposit DECIMAL DEFAULT 0,
-          PRIMARY KEY (user_id, month_year)
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS balance_transfers (
-          id SERIAL PRIMARY KEY,
-          from_user_id BIGINT REFERENCES users(user_id),
-          to_user_id BIGINT REFERENCES users(user_id),
-          amount DECIMAL,
-          transfer_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          note TEXT
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS referrals (
-          id SERIAL PRIMARY KEY,
-          referrer_id BIGINT REFERENCES users(user_id),
-          referred_id BIGINT UNIQUE REFERENCES users(user_id),
-          referral_code TEXT,
-          joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          is_active BOOLEAN DEFAULT TRUE
-        )`,
-
-        `CREATE TABLE IF NOT EXISTS referral_earnings (
-          id SERIAL PRIMARY KEY,
-          referrer_id BIGINT REFERENCES users(user_id),
-          referred_id BIGINT REFERENCES users(user_id),
-          deposit_amount DECIMAL,
-          commission_amount DECIMAL,
-          commission_percent DECIMAL DEFAULT 5,
-          earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`
-      ];
-
-      for (const query of queries) {
-        await this.client.query(query);
-      }
-
-      console.log('✅ Database tables initialized successfully!');
+      await this.createTables();
+      
+      console.log('Database initialized successfully!✅');
     } catch (error) {
-      console.error('❌ Database initialization error:', error);
-      throw error;
+      console.error('❌ Database connection error:', error);
+      process.exit(1);
+    }
+  }
+
+  async createTables() {
+    const queries = [
+      `CREATE TABLE IF NOT EXISTS users (
+        user_id BIGINT PRIMARY KEY,
+        balance DECIMAL(10,2) DEFAULT 0,
+        joined_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        channel_joined BOOLEAN DEFAULT FALSE,
+        terms_accepted BOOLEAN DEFAULT FALSE,
+        last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        total_orders INTEGER DEFAULT 0,
+        first_name TEXT,
+        username TEXT
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        user_id BIGINT REFERENCES users(user_id),
+        service TEXT,
+        phone TEXT,
+        price DECIMAL(10,2),
+        order_id TEXT UNIQUE,
+        activation_id TEXT,
+        status TEXT,
+        order_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        otp_code TEXT DEFAULT NULL,
+        server_used TEXT,
+        original_price DECIMAL(10,2),
+        discount_applied DECIMAL(10,2) DEFAULT 0
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS active_orders (
+        order_id TEXT PRIMARY KEY,
+        activation_id TEXT,
+        user_id BIGINT REFERENCES users(user_id),
+        phone TEXT,
+        product TEXT,
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        server_used TEXT
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS topup_requests (
+        id SERIAL PRIMARY KEY,
+        user_id BIGINT REFERENCES users(user_id),
+        amount DECIMAL(10,2),
+        utr TEXT UNIQUE,
+        status TEXT,
+        request_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS gift_codes (
+        code TEXT PRIMARY KEY,
+        amount DECIMAL(10,2),
+        created_by BIGINT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        max_uses INTEGER DEFAULT 1,
+        expires_at TIMESTAMP,
+        min_deposit DECIMAL(10,2) DEFAULT 0
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS gift_code_uses (
+        id SERIAL PRIMARY KEY,
+        code TEXT REFERENCES gift_codes(code),
+        user_id BIGINT REFERENCES users(user_id),
+        used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(code, user_id)
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS admin_logs (
+        id SERIAL PRIMARY KEY,
+        admin_id BIGINT,
+        action TEXT,
+        target_user_id BIGINT,
+        details TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS monthly_deposits (
+        user_id BIGINT REFERENCES users(user_id),
+        month_year TEXT,
+        total_deposit DECIMAL(10,2) DEFAULT 0,
+        PRIMARY KEY (user_id, month_year)
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS balance_transfers (
+        id SERIAL PRIMARY KEY,
+        from_user_id BIGINT REFERENCES users(user_id),
+        to_user_id BIGINT REFERENCES users(user_id),
+        amount DECIMAL(10,2),
+        transfer_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        note TEXT
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS referrals (
+        id SERIAL PRIMARY KEY,
+        referrer_id BIGINT REFERENCES users(user_id),
+        referred_id BIGINT UNIQUE REFERENCES users(user_id),
+        referral_code TEXT,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        is_active BOOLEAN DEFAULT TRUE
+      )`,
+
+      `CREATE TABLE IF NOT EXISTS referral_earnings (
+        id SERIAL PRIMARY KEY,
+        referrer_id BIGINT REFERENCES users(user_id),
+        referred_id BIGINT REFERENCES users(user_id),
+        deposit_amount DECIMAL(10,2),
+        commission_amount DECIMAL(10,2),
+        commission_percent DECIMAL(5,2) DEFAULT 5,
+        earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`
+    ];
+
+    for (const query of queries) {
+      try {
+        await this.client.query(query);
+      } catch (error) {
+        console.error('Error creating table:', error);
+      }
     }
   }
 
   getCurrentMonthYear() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  }
-
-  async executeQuery(query) {
-    return await this.client.query(query);
   }
 
   async getUser(userId) {
@@ -172,9 +176,7 @@ class DatabaseManager {
           channel_joined: false,
           terms_accepted: false,
           last_checked: joinDate,
-          total_orders: 0,
-          first_name: null,
-          username: null
+          total_orders: 0
         };
       }
 
@@ -193,26 +195,21 @@ class DatabaseManager {
   }
 
   async updateBalance(userId, amount) {
-    try {
-      console.log(`💰 Updating balance: User ${userId}, Amount: ${amount}`);
+    console.log(`💰 Updating balance: User ${userId}, Amount: ${amount}`);
+    
+    const result = await this.client.query(
+      'UPDATE users SET balance = balance + $1 WHERE user_id = $2 RETURNING *',
+      [amount, userId]
+    );
 
-      const result = await this.client.query(
-        'UPDATE users SET balance = balance + $1 WHERE user_id = $2',
-        [amount, userId]
-      );
-
-      if (result.rowCount === 0) {
-        throw new Error('User not found');
-      }
-    } catch (error) {
-      console.error('❌ Error updating balance:', error);
-      throw error;
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
     }
   }
 
   async updateMonthlyDeposit(userId, amount) {
     const currentMonth = this.getCurrentMonthYear();
-
+    
     await this.client.query(
       `INSERT INTO monthly_deposits (user_id, month_year, total_deposit)
        VALUES ($1, $2, $3)
@@ -224,7 +221,7 @@ class DatabaseManager {
 
   async setMonthlyDeposit(userId, amount) {
     const currentMonth = this.getCurrentMonthYear();
-
+    
     await this.client.query(
       `INSERT INTO monthly_deposits (user_id, month_year, total_deposit)
        VALUES ($1, $2, $3)
@@ -236,7 +233,7 @@ class DatabaseManager {
 
   async resetMonthlyDeposit(userId) {
     const currentMonth = this.getCurrentMonthYear();
-
+    
     await this.client.query(
       'UPDATE monthly_deposits SET total_deposit = 0 WHERE user_id = $1 AND month_year = $2',
       [userId, currentMonth]
@@ -245,7 +242,7 @@ class DatabaseManager {
 
   async getMonthlyDeposit(userId) {
     const currentMonth = this.getCurrentMonthYear();
-
+    
     const result = await this.client.query(
       'SELECT total_deposit FROM monthly_deposits WHERE user_id = $1 AND month_year = $2',
       [userId, currentMonth]
@@ -256,7 +253,7 @@ class DatabaseManager {
 
   async getTopDepositors(limit, offset) {
     const currentMonth = this.getCurrentMonthYear();
-
+    
     const result = await this.client.query(
       `SELECT u.user_id, u.first_name, u.username, md.total_deposit
        FROM monthly_deposits md
@@ -267,20 +264,20 @@ class DatabaseManager {
       [currentMonth, limit, offset]
     );
 
-    const countResult = await this.client.query(
-      'SELECT COUNT(*) FROM monthly_deposits WHERE month_year = $1',
+    const totalResult = await this.client.query(
+      'SELECT COUNT(*) as count FROM monthly_deposits WHERE month_year = $1',
       [currentMonth]
     );
 
     return {
       users: result.rows,
-      total: parseInt(countResult.rows[0].count)
+      total: parseInt(totalResult.rows[0].count)
     };
   }
 
   async getAllDepositors(limit, offset) {
     const currentMonth = this.getCurrentMonthYear();
-
+    
     const result = await this.client.query(
       `SELECT u.user_id, u.first_name, u.username, md.total_deposit
        FROM monthly_deposits md
@@ -291,20 +288,20 @@ class DatabaseManager {
       [currentMonth, limit, offset]
     );
 
-    const countResult = await this.client.query(
-      'SELECT COUNT(*) FROM monthly_deposits WHERE month_year = $1',
+    const totalResult = await this.client.query(
+      'SELECT COUNT(*) as count FROM monthly_deposits WHERE month_year = $1',
       [currentMonth]
     );
 
     return {
       users: result.rows,
-      total: parseInt(countResult.rows[0].count)
+      total: parseInt(totalResult.rows[0].count)
     };
   }
 
   async getDiscountedUsers(minDeposit, limit, offset) {
     const currentMonth = this.getCurrentMonthYear();
-
+    
     const result = await this.client.query(
       `SELECT u.user_id, u.first_name, u.username, md.total_deposit
        FROM monthly_deposits md
@@ -315,14 +312,14 @@ class DatabaseManager {
       [currentMonth, minDeposit, limit, offset]
     );
 
-    const countResult = await this.client.query(
-      'SELECT COUNT(*) FROM monthly_deposits WHERE month_year = $1 AND total_deposit >= $2',
+    const totalResult = await this.client.query(
+      'SELECT COUNT(*) as count FROM monthly_deposits WHERE month_year = $1 AND total_deposit >= $2',
       [currentMonth, minDeposit]
     );
 
     return {
       users: result.rows,
-      total: parseInt(countResult.rows[0].count)
+      total: parseInt(totalResult.rows[0].count)
     };
   }
 
@@ -334,21 +331,21 @@ class DatabaseManager {
   }
 
   async getTotalUsers() {
-    const result = await this.client.query('SELECT COUNT(*) FROM users');
+    const result = await this.client.query('SELECT COUNT(*) as count FROM users');
     return parseInt(result.rows[0].count);
   }
 
   async getTotalOrders() {
-    const result = await this.client.query('SELECT COUNT(*) FROM orders');
+    const result = await this.client.query('SELECT COUNT(*) as count FROM orders');
     return parseInt(result.rows[0].count);
   }
 
   async getTotalRevenue() {
     const result = await this.client.query(
-      'SELECT SUM(price) FROM orders WHERE status = $1',
+      'SELECT SUM(price) as total FROM orders WHERE status = $1',
       ['completed']
     );
-    return parseFloat(result.rows[0].sum) || 0;
+    return parseFloat(result.rows[0].total) || 0;
   }
 
   async getAllUsers(limit = 50) {
@@ -364,7 +361,7 @@ class DatabaseManager {
     const result = await this.client.query(
       `SELECT user_id, first_name, username, balance, total_orders
        FROM users
-       WHERE user_id::TEXT LIKE $1 OR first_name LIKE $2 OR username LIKE $3
+       WHERE user_id::text LIKE $1 OR first_name LIKE $2 OR username LIKE $3
        LIMIT 20`,
       [searchQuery, searchQuery, searchQuery]
     );
@@ -375,11 +372,11 @@ class DatabaseManager {
     const { code, amount, createdBy, maxUses = 1, expiresAt } = codeData;
     
     const result = await this.client.query(
-      'INSERT INTO gift_codes (code, amount, created_by, max_uses, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING code',
+      'INSERT INTO gift_codes (code, amount, created_by, max_uses, expires_at) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [code, amount, createdBy, maxUses, expiresAt]
     );
     
-    return result.rows[0].code;
+    return result.rows[0];
   }
 
   async getGiftCode(code) {
@@ -414,17 +411,25 @@ class DatabaseManager {
 
   async createGiftCodeWithCondition(codeData) {
     const { code, amount, createdBy, maxUses = 1, expiresAt, minDeposit = 0 } = codeData;
-
+    
     const result = await this.client.query(
-      'INSERT INTO gift_codes (code, amount, created_by, max_uses, expires_at, min_deposit) VALUES ($1, $2, $3, $4, $5, $6) RETURNING code',
+      'INSERT INTO gift_codes (code, amount, created_by, max_uses, expires_at, min_deposit) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
       [code, amount, createdBy, maxUses, expiresAt, minDeposit]
     );
     
-    return result.rows[0].code;
+    return result.rows[0];
   }
 
   async getGiftCodeWithCondition(code) {
-    return this.getGiftCode(code); // Same as getGiftCode
+    const result = await this.client.query(
+      `SELECT g.*, COUNT(gu.id) as used_count
+       FROM gift_codes g
+       LEFT JOIN gift_code_uses gu ON g.code = gu.code
+       WHERE g.code = $1
+       GROUP BY g.code`,
+      [code]
+    );
+    return result.rows[0];
   }
 
   async getAllGiftCodes() {
@@ -509,7 +514,7 @@ class DatabaseManager {
   }
 
   async getTotalBalanceTransfers() {
-    const result = await this.client.query('SELECT COUNT(*) FROM balance_transfers');
+    const result = await this.client.query('SELECT COUNT(*) as count FROM balance_transfers');
     return parseInt(result.rows[0].count);
   }
 
@@ -552,7 +557,7 @@ class DatabaseManager {
 
   async addOrder(orderData) {
     const { user_id, service, phone, price, order_id, activation_id, status, server_used, original_price, discount_applied } = orderData;
-
+    
     await this.client.query(
       `INSERT INTO orders (user_id, service, phone, price, order_id, activation_id, status, server_used, original_price, discount_applied)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -564,12 +569,12 @@ class DatabaseManager {
 
   async addActiveOrder(orderData) {
     const { order_id, activation_id, user_id, phone, product, expires_at, server_used } = orderData;
-
+    
     await this.client.query(
       `INSERT INTO active_orders (order_id, activation_id, user_id, phone, product, expires_at, server_used)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (order_id) DO UPDATE SET
-         activation_id = $2, phone = $4, product = $5, expires_at = $6, server_used = $7`,
+         activation_id = $2, phone = $4, expires_at = $6, server_used = $7`,
       [order_id, activation_id, user_id, phone, product, expires_at, server_used || '']
     );
   }
@@ -698,7 +703,7 @@ class DatabaseManager {
 
   async addReferralEarning(earningData) {
     const { referrer_id, referred_id, deposit_amount, commission_amount, commission_percent = 5 } = earningData;
-
+    
     console.log(`💾 Saving referral earning: Referrer ${referrer_id}, Referred ${referred_id}, Commission ₹${commission_amount}`);
 
     const result = await this.client.query(
@@ -707,8 +712,8 @@ class DatabaseManager {
        VALUES ($1, $2, $3, $4, $5) RETURNING id`,
       [referrer_id, referred_id, deposit_amount, commission_amount, commission_percent]
     );
-
-    console.log(`✅ Referral earning saved with ID: ${result.rows[0].id}`);
+    
+    console.log(`Referral earning saved with ID: ${result.rows[0].id}`);
     return result.rows[0].id;
   }
 
@@ -743,6 +748,7 @@ class DatabaseManager {
        WHERE r.referrer_id = $1 AND r.is_active = TRUE`,
       [userId]
     );
+    
     return result.rows[0] || { total_referrals: 0, active_referrals: 0, total_earnings: 0 };
   }
 
