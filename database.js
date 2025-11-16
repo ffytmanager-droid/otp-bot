@@ -8,10 +8,18 @@ class DatabaseManager {
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       max: 20,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 10000,
     });
 
-    this.initDatabase();
+    this.initialized = false;
+    this.initPromise = this.initDatabase();
+  }
+
+  // Wait for database to be fully initialized
+  async waitForInit() {
+    if (!this.initialized) {
+      await this.initPromise;
+    }
   }
 
   getCurrentMonthYear() {
@@ -20,6 +28,7 @@ class DatabaseManager {
   }
 
   async initDatabase() {
+    console.log('🔄 Initializing PostgreSQL Database...');
     const client = await this.pool.connect();
     
     try {
@@ -138,11 +147,17 @@ class DatabaseManager {
       ];
 
       for (const tableQuery of tables) {
-        await client.query(tableQuery);
+        try {
+          await client.query(tableQuery);
+          console.log(`✅ Table created/verified: ${tableQuery.split('(')[0].split('TABLE ')[1]}`);
+        } catch (error) {
+          console.error(`❌ Error creating table:`, error.message);
+        }
       }
 
       await client.query('COMMIT');
-      console.log('PostgreSQL Database initialized successfully!✅');
+      this.initialized = true;
+      console.log('✅ PostgreSQL Database initialized successfully!');
     } catch (error) {
       await client.query('ROLLBACK');
       console.error('❌ Database initialization error:', error);
@@ -153,10 +168,17 @@ class DatabaseManager {
   }
 
   async query(text, params) {
+    // Wait for database to be ready before any query
+    await this.waitForInit();
+    
     const client = await this.pool.connect();
     try {
+      console.log(`📝 Executing query: ${text.substring(0, 50)}...`);
       const result = await client.query(text, params);
       return result;
+    } catch (error) {
+      console.error('❌ Database query error:', error);
+      throw error;
     } finally {
       client.release();
     }
@@ -164,34 +186,31 @@ class DatabaseManager {
 
   async getUser(userId) {
     try {
+      console.log(`🔍 Getting user: ${userId}`);
+      
       const result = await this.query(
         'SELECT * FROM users WHERE user_id = $1',
         [userId]
       );
 
       if (result.rows.length === 0) {
+        console.log(`👤 Creating new user: ${userId}`);
         const joinDate = new Date().toISOString();
         
-        await this.query(
+        const insertResult = await this.query(
           `INSERT INTO users (user_id, balance, joined_date, channel_joined, terms_accepted, last_checked, total_orders) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
           [userId, 0, joinDate, false, false, joinDate, 0]
         );
 
-        return {
-          user_id: userId,
-          balance: 0,
-          joined_date: joinDate,
-          channel_joined: false,
-          terms_accepted: false,
-          last_checked: joinDate,
-          total_orders: 0
-        };
+        console.log(`✅ New user created: ${userId}, Balance: ${insertResult.rows[0].balance}`);
+        return insertResult.rows[0];
       }
 
+      console.log(`✅ User found: ${userId}, Balance: ${result.rows[0].balance}`);
       return result.rows[0];
     } catch (error) {
-      console.error('Get user error:', error);
+      console.error('❌ Get user error:', error);
       throw error;
     }
   }
@@ -204,28 +223,50 @@ class DatabaseManager {
   }
 
   async updateBalance(userId, amount) {
-    console.log(`💰 Updating balance: User ${userId}, Amount: ${amount}`);
-    
-    const result = await this.query(
-      'UPDATE users SET balance = balance + $1 WHERE user_id = $2',
-      [amount, userId]
-    );
+    try {
+      console.log(`💰 Updating balance: User ${userId}, Amount: ${amount}`);
+      
+      const result = await this.query(
+        'UPDATE users SET balance = balance + $1 WHERE user_id = $2 RETURNING balance',
+        [amount, userId]
+      );
 
-    if (result.rowCount === 0) {
-      throw new Error('User not found');
+      if (result.rows.length === 0) {
+        throw new Error('User not found');
+      }
+
+      const newBalance = parseFloat(result.rows[0].balance);
+      console.log(`✅ Balance updated: User ${userId}, New Balance: ${newBalance}`);
+      
+      return newBalance;
+    } catch (error) {
+      console.error('❌ Update balance error:', error);
+      throw error;
     }
   }
 
   async updateMonthlyDeposit(userId, amount) {
-    const currentMonth = this.getCurrentMonthYear();
-    
-    await this.query(
-      `INSERT INTO monthly_deposits (user_id, month_year, total_deposit)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (user_id, month_year)
-       DO UPDATE SET total_deposit = monthly_deposits.total_deposit + $4`,
-      [userId, currentMonth, amount, amount]
-    );
+    try {
+      const currentMonth = this.getCurrentMonthYear();
+      console.log(`📈 Updating monthly deposit: User ${userId}, Amount: ${amount}, Month: ${currentMonth}`);
+      
+      const result = await this.query(
+        `INSERT INTO monthly_deposits (user_id, month_year, total_deposit)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, month_year)
+         DO UPDATE SET total_deposit = monthly_deposits.total_deposit + $4
+         RETURNING total_deposit`,
+        [userId, currentMonth, amount, amount]
+      );
+
+      const newDeposit = parseFloat(result.rows[0].total_deposit);
+      console.log(`✅ Monthly deposit updated: User ${userId}, Total: ${newDeposit}`);
+      
+      return newDeposit;
+    } catch (error) {
+      console.error('❌ Update monthly deposit error:', error);
+      throw error;
+    }
   }
 
   async setMonthlyDeposit(userId, amount) {
@@ -487,15 +528,25 @@ class DatabaseManager {
     try {
       await client.query('BEGIN');
 
-      await client.query(
-        'UPDATE users SET balance = balance - $1 WHERE user_id = $2',
+      // Update from user balance
+      const fromResult = await client.query(
+        'UPDATE users SET balance = balance - $1 WHERE user_id = $2 RETURNING balance',
         [amount, fromUserId]
       );
 
-      await client.query(
-        'UPDATE users SET balance = balance + $1 WHERE user_id = $2',
+      if (fromResult.rows.length === 0) {
+        throw new Error('From user not found');
+      }
+
+      // Update to user balance
+      const toResult = await client.query(
+        'UPDATE users SET balance = balance + $1 WHERE user_id = $2 RETURNING balance',
         [amount, toUserId]
       );
+
+      if (toResult.rows.length === 0) {
+        throw new Error('To user not found');
+      }
 
       const result = await client.query(
         'INSERT INTO balance_transfers (from_user_id, to_user_id, amount, note) VALUES ($1, $2, $3, $4) RETURNING id',
@@ -719,7 +770,7 @@ class DatabaseManager {
       [referrer_id, referred_id, deposit_amount, commission_amount, commission_percent]
     );
 
-    console.log(`Referral earning saved with ID: ${result.rows[0].id}`);
+    console.log(`✅ Referral earning saved with ID: ${result.rows[0].id}`);
     return result.rows[0].id;
   }
 
@@ -762,6 +813,40 @@ class DatabaseManager {
     const result = await this.query('SELECT * FROM referrals');
     console.log('🔍 DEBUG - All referrals:', result.rows);
     return result.rows;
+  }
+
+  async debugUserBalance(userId) {
+    try {
+      const result = await this.query(
+        'SELECT user_id, balance FROM users WHERE user_id = $1',
+        [userId]
+      );
+      
+      console.log(`🔍 DEBUG User ${userId}:`, result.rows[0] || 'Not found');
+      return result.rows[0];
+    } catch (error) {
+      console.error('Debug balance error:', error);
+    }
+  }
+
+  async debugDatabaseState() {
+    try {
+      console.log('🔍 DEBUG: Database State');
+      
+      const usersCount = await this.query('SELECT COUNT(*) FROM users');
+      const ordersCount = await this.query('SELECT COUNT(*) FROM orders');
+      const depositsCount = await this.query('SELECT COUNT(*) FROM monthly_deposits');
+      const topupCount = await this.query('SELECT COUNT(*) FROM topup_requests');
+      
+      console.log(`📊 Users: ${usersCount.rows[0].count}, Orders: ${ordersCount.rows[0].count}, Deposits: ${depositsCount.rows[0].count}, Topups: ${topupCount.rows[0].count}`);
+      
+      // Show first 3 users with balances
+      const users = await this.query('SELECT user_id, balance FROM users LIMIT 3');
+      console.log('👥 First 3 users:', users.rows);
+      
+    } catch (error) {
+      console.error('❌ Debug error:', error);
+    }
   }
 
   async close() {
