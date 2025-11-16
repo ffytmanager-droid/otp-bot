@@ -30,7 +30,7 @@ const validateEnv = () => {
 validateEnv();
 
 module.exports = {
-  // Bot Configuration
+  // Telegram Bot Configuration
   BOT_TOKEN: process.env.BOT_TOKEN,
   NOTIFICATION_BOT_TOKEN: process.env.NOTIFICATION_BOT_TOKEN,
   NOTIFICATION_CHAT_ID: process.env.NOTIFICATION_CHAT_ID,
@@ -54,7 +54,7 @@ module.exports = {
   // Database Configuration
   DATABASE_URL: process.env.DATABASE_URL,
 
-  // Feature Settings
+  // Discount Settings
   DISCOUNT_SETTINGS: {
     enabled: true,
     tiers: [
@@ -64,6 +64,7 @@ module.exports = {
     ]
   },
 
+  // Referral Settings
   REFERRAL_SETTINGS: {
     enabled: true,
     commission_percent: 5,
@@ -71,12 +72,14 @@ module.exports = {
     referral_code_length: 8
   },
 
+  // Broadcast Settings
   BROADCAST_SETTINGS: {
     enabled: true,
     max_message_length: 4096,
     allowed_formats: ['text', 'photo', 'document']
   },
 
+  // Services Configuration (same as before)
   SERVICES: {
     "SHEIN": { name: "SHEIN", price: 8.44, command: "/find_SHEIN" },
     "FACEBOOK": { name: "Facebook", price: 18, command: "/find_FACEBOOK" },
